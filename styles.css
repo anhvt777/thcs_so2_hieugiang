@@ -133,3 +133,11 @@
 .school-brand .brand-copy strong{font-size:13px;line-height:1.35;letter-spacing:.2px;text-transform:uppercase}
 .school-brand .brand-copy small{font-size:11px;line-height:1.35;margin-top:5px}
 .sidebar-bottom{margin-top:auto;padding-top:10px;border-top:1px solid #ffffff1d}
+
+.student-status-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.student-status-badge.active{background:#e5f5ef;color:#0b7a62}
+.student-status-badge.inactive{background:#f5ebe8;color:#9a3c2f}
+.student-inactive-row{opacity:.72;background:#faf8f7}
+.student-profile-actions{display:flex;gap:10px;justify-content:flex-end;margin:14px 0 4px;flex-wrap:wrap}
+.student-manage-sheet{max-width:760px}
+.compact-select{min-height:42px;border:1px solid var(--border);border-radius:12px;padding:0 12px;background:#fff;color:var(--text)}
