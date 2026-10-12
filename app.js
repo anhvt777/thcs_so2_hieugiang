@@ -244,11 +244,16 @@ function parseAmount(value) {
   return Math.round(Number(s) || 0);
 }
 function normalizeDate(value) {
-  if (!value) return '';
-  if (/^\d+(\.\d+)?$/.test(value) && Number(value) > 15000 && Number(value) < 90000) return new Date(Date.UTC(1899, 11, 30) + Number(value) * 86400000).toISOString().slice(0, 10);
-  const m = value.match(/^(\d{1,2})[/. -](\d{1,2})[/. -](\d{2,4})/);
-  if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-  const d = new Date(value); return Number.isNaN(d.getTime()) ? value : d.toISOString().slice(0, 10);
+  const raw=String(value??'').trim();if(!raw)return '';
+  if (/^\d+(\.\d+)?$/.test(raw) && Number(raw) > 15000 && Number(raw) < 90000) {
+    const days=Math.floor(Number(raw)),ms=Date.UTC(1899,11,30)+days*86400000;
+    return new Date(ms).toISOString().slice(0,10);
+  }
+  let m=raw.match(/^(\d{4})[/. -](\d{1,2})[/. -](\d{1,2})$/);
+  if(m)return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m=raw.match(/^(\d{1,2})[/. -](\d{1,2})[/. -](\d{2,4})$/);
+  if(m){const y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;}
+  return raw;
 }
 function isSuccessfulBankStatus(value) {
   const status=slug(value);
@@ -330,22 +335,23 @@ function studentFallbackIdentity(s){
   if(name&&gender&&cls)return `ngc|${name}|${gender}|${cls}`;
   return '';
 }
+function deterministicNaturalKey(value){
+  return feeSafeCode(value,120).replace(/\d+/g,m=>m.padStart(8,'0'));
+}
+function deterministicCompare(a,b){
+  const aa=String(a??''),bb=String(b??'');return aa<bb?-1:aa>bb?1:0;
+}
+function canonicalStudentImportKey(row,map){
+  return [
+    deterministicNaturalKey(cell(row,map,'className')),
+    deterministicNaturalKey(cell(row,map,'name')),
+    normalizeDate(cell(row,map,'birthDate')),
+    deterministicNaturalKey(cell(row,map,'gender')),
+    deterministicNaturalKey(cell(row,map,'externalCode'))
+  ].join('|');
+}
 function compareStudentImportRows(a,b,map){
-  const av={
-    className:cell(a,map,'className'),name:cell(a,map,'name'),
-    birth:normalizeDate(cell(a,map,'birthDate')),gender:cell(a,map,'gender'),
-    external:cell(a,map,'externalCode')
-  };
-  const bv={
-    className:cell(b,map,'className'),name:cell(b,map,'name'),
-    birth:normalizeDate(cell(b,map,'birthDate')),gender:cell(b,map,'gender'),
-    external:cell(b,map,'externalCode')
-  };
-  return String(av.className||'').localeCompare(String(bv.className||''),'vi',{numeric:true,sensitivity:'base'})
-    ||String(av.name||'').localeCompare(String(bv.name||''),'vi',{sensitivity:'base'})
-    ||String(av.birth||'').localeCompare(String(bv.birth||''))
-    ||String(av.gender||'').localeCompare(String(bv.gender||''))
-    ||String(av.external||'').localeCompare(String(bv.external||''));
+  return deterministicCompare(canonicalStudentImportKey(a,map),canonicalStudentImportKey(b,map));
 }
 function createStudentCodeAllocator(existingList){
   const used=new Set(existingList.map(s=>slug(s.code)).filter(Boolean));let max=0;
@@ -493,6 +499,7 @@ async function confirmImport() {
             hasFeeBreakdown:feeMapped?fees.hasFeeBreakdown:!!prior.hasFeeBreakdown,
             identityKey:studentIdentity({name:choose(name,prior.name),className:effectiveClass,birthDate:choose(profile.birthDate,prior.birthDate),gender:choose(profile.gender,prior.gender),externalCode:choose(profile.externalCode,prior.externalCode)}),
             identityLockedAt:prior.identityLockedAt||now,
+            idSchemeVersion:2,
             status:'active',inactiveReason:'',statusChangedAt:prior.status==='inactive'?now:(prior.statusChangedAt||now),
             updatedAt:now
           };
@@ -1375,7 +1382,7 @@ async function saveManagedStudent(){
   if(students.some(s=>slug(s.name)===slug(name)&&String(s.birthDate||'')===String(birthDate||'')))return toast('Học sinh cùng họ tên và ngày sinh đã tồn tại. Hãy mở hồ sơ hiện có.',true);
   const codeAllocator=createStudentCodeAllocator(students),classAllocator=createClassStudentCodeAllocator(students),now=new Date().toISOString();
   const code=codeAllocator.next(),classStudentCode=classAllocator.next(className);
-  const student={code,classStudentCode,classCodeHistory:[],classCodeAssignedAt:now,name,className,birthDate,gender,externalCode,studentType,note,status:'active',statusChangedAt:now,createdAt:now,updatedAt:now,due:0,dueItems:[],dueByCategory:{insurance:0,mandatory:0,service:0,other:0},hasFeeBreakdown:true,identityKey:studentIdentity({name,className,birthDate,gender,externalCode}),identityLockedAt:now,dataWarnings:[]};
+  const student={code,classStudentCode,classCodeHistory:[],classCodeAssignedAt:now,name,className,birthDate,gender,externalCode,studentType,note,status:'active',statusChangedAt:now,createdAt:now,updatedAt:now,due:0,dueItems:[],dueByCategory:{insurance:0,mandatory:0,service:0,other:0},hasFeeBreakdown:true,identityKey:studentIdentity({name,className,birthDate,gender,externalCode}),identityLockedAt:now,idSchemeVersion:2,dataWarnings:[]};
   await putMany('students',[student]);closeStudentManage();await refresh();toast(`Đã thêm ${name} với mã ${classStudentCode}.`);
 }
 async function transferCurrentStudent(){
@@ -2146,7 +2153,7 @@ async function migrateSchool2StudentData(){
     if(!classAllocator.validForClass(classStudentCode,s.className))classStudentCode=classAllocator.next(s.className||'Chưa xếp lớp');
     const clean={
       ...s,code,classStudentCode,
-      status:s.status||'active',inactiveReason:s.inactiveReason||'',classCodeHistory:Array.isArray(s.classCodeHistory)?s.classCodeHistory:[],
+      status:s.status||'active',inactiveReason:s.inactiveReason||'',classCodeHistory:Array.isArray(s.classCodeHistory)?s.classCodeHistory:[],idSchemeVersion:s.idSchemeVersion||1,
       personalId:'',ethnicity:'',fatherName:'',motherName:'',phone:'',
       dataWarnings:studentWarnings({...s,code,classStudentCode,dataWarnings:[]})
     };
