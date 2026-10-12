@@ -7,7 +7,7 @@
   <meta name="description" content="Quản lý và đối soát từng khoản thu học sinh. Dữ liệu được lưu cục bộ trên thiết bị đang sử dụng.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self'; manifest-src 'self'; form-action 'self'">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=20261010d">
+  <link rel="stylesheet" href="styles.css?v=20261012a">
   <title>Trường THCS Số 2 Hiếu Giang · Quản lý thu học sinh</title>
 </head>
 <body>
@@ -74,10 +74,10 @@
       </section>
 
       <section class="page" id="page-students">
-        <div class="page-heading"><div><span class="eyebrow">DANH SÁCH GỐC</span><h1>Học sinh</h1><p>Quản lý hồ sơ học sinh và toàn bộ các khoản phải thu đã phân giao.</p></div><button class="button button-primary" id="studentImportButton">⇧ Tải file học sinh</button></div>
-        <div class="toolbar"><div class="search-box"><span>⌕</span><input id="studentSearch" type="search" placeholder="Tìm theo tên, mã học sinh, Mã số CĐ, lớp..."></div><div class="toolbar-right"><span id="studentCountLabel">0 học sinh</span><button class="button button-outline" id="exportStudents">↓ Xuất danh sách</button></div></div>
+        <div class="page-heading"><div><span class="eyebrow">DANH SÁCH GỐC</span><h1>Học sinh</h1><p>Quản lý hồ sơ học sinh và toàn bộ các khoản phải thu đã phân giao.</p></div><div class="fee-builder-actions"><button class="button button-outline" id="addStudentButton">＋ Thêm học sinh</button><button class="button button-primary" id="studentImportButton">⇧ Tải file học sinh</button></div></div>
+        <div class="toolbar"><div class="search-box"><span>⌕</span><input id="studentSearch" type="search" placeholder="Tìm theo tên, mã học sinh, Mã số CĐ, lớp..."></div><div class="toolbar-right"><select id="studentStatusFilter" class="compact-select"><option value="active">Đang học</option><option value="inactive">Đã nghỉ/chuyển trường</option><option value="all">Tất cả học sinh</option></select><span id="studentCountLabel">0 học sinh</span><button class="button button-outline" id="exportStudents">↓ Xuất danh sách</button></div></div>
         <div class="student-warning-panel" id="studentWarningPanel" hidden><div><strong id="studentWarningTitle">Có hồ sơ cần bổ sung</strong><p id="studentWarningText"></p></div><button class="button button-outline button-small" id="showIncompleteStudents">Xem hồ sơ cần bổ sung</button></div>
-        <article class="panel table-panel"><div class="table-wrap"><table class="student-master-table"><thead><tr><th>MÃ HS THEO LỚP</th><th>HỌ VÀ TÊN</th><th>LỚP</th><th>GIỚI TÍNH</th><th>NGÀY SINH</th><th>PHÂN LOẠI / GHI CHÚ</th><th>MÓN PHẢI THU</th><th>PHẢI THU</th><th>ĐÃ THU</th><th>CÒN LẠI</th><th></th></tr></thead><tbody id="studentsTable"><tr><td colspan="11" class="empty-cell">Chưa có học sinh. Hãy tải file danh sách gốc của trường.</td></tr></tbody></table></div></article>
+        <article class="panel table-panel"><div class="table-wrap"><table class="student-master-table"><thead><tr><th>MÃ HS THEO LỚP</th><th>HỌ VÀ TÊN</th><th>LỚP</th><th>GIỚI TÍNH</th><th>NGÀY SINH</th><th>TRẠNG THÁI</th><th>PHÂN LOẠI / GHI CHÚ</th><th>MÓN PHẢI THU</th><th>PHẢI THU</th><th>ĐÃ THU</th><th>CÒN LẠI</th><th></th></tr></thead><tbody id="studentsTable"><tr><td colspan="12" class="empty-cell">Chưa có học sinh. Hãy tải file danh sách gốc của trường.</td></tr></tbody></table></div></article>
         <p class="table-note">Web chỉ hiển thị các trường có trong file của THCS Số 2 Hiếu Giang, cộng với mã HS theo lớp do hệ thống tạo. Không tự suy đoán phụ huynh, điện thoại, CCCD hoặc các trường không có trong file. BHYT/BHTT được đọc trực tiếp thành khoản phải thu.</p>
       </section>
 
@@ -361,7 +361,24 @@
     <section class="student-profile-sheet" role="dialog" aria-modal="true" aria-labelledby="studentProfileTitle">
       <div class="class-detail-head"><div><span class="eyebrow">HỒ SƠ HỌC SINH</span><h2 id="studentProfileTitle">Học sinh</h2><p id="studentProfileSubtitle"></p></div><button class="icon-button" id="studentProfileClose" aria-label="Đóng">×</button></div>
       <div class="student-profile-grid" id="studentProfileInfo"></div>
+      <div class="student-profile-actions" id="studentProfileActions"><button class="button button-outline" id="transferStudentButton">⇄ Chuyển lớp</button><button class="button button-outline" id="toggleStudentStatusButton">Ngừng theo dõi</button></div>
       <div class="student-profile-fees"><div class="panel-header"><div><h2>Các khoản phải thu</h2><p>Trạng thái được đối soát theo từng mã khách hàng.</p></div></div><div id="studentProfileFees"></div></div>
+    </section>
+  </div>
+  <div class="student-profile-backdrop" id="studentManageBackdrop">
+    <section class="student-profile-sheet student-manage-sheet" role="dialog" aria-modal="true" aria-labelledby="studentManageTitle">
+      <div class="class-detail-head"><div><span class="eyebrow">QUẢN LÝ HỌC SINH</span><h2 id="studentManageTitle">Thêm học sinh</h2><p id="studentManageSubtitle">Mã gốc được cấp một lần và giữ cố định.</p></div><button class="icon-button" id="studentManageClose" aria-label="Đóng">×</button></div>
+      <div class="fee-form-grid">
+        <label class="qr-field"><span>Họ và tên *</span><input id="manageStudentName" maxlength="120"></label>
+        <label class="qr-field"><span>Lớp *</span><input id="manageStudentClass" maxlength="20" placeholder="Ví dụ: 6A1"></label>
+        <label class="qr-field"><span>Ngày sinh</span><input id="manageStudentBirthDate" type="date"></label>
+        <label class="qr-field"><span>Giới tính</span><select id="manageStudentGender"><option value="">—</option><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select></label>
+        <label class="qr-field"><span>Mã số CĐ (nếu có)</span><input id="manageStudentExternalCode" maxlength="30"></label>
+        <label class="qr-field"><span>Phân loại HS</span><input id="manageStudentType" maxlength="80"></label>
+        <label class="qr-field"><span>Ghi chú</span><input id="manageStudentNote" maxlength="160"></label>
+      </div>
+      <div class="mapping-note"><span class="note-icon">i</span><div><strong>Nguyên tắc mã:</strong><p>Mã gốc HG2-xxxxx không đổi khi chuyển lớp hoặc nhập lại file. Mã theo lớp chỉ đổi khi học sinh chuyển lớp; mã cũ được lưu vào lịch sử để tra soát.</p></div></div>
+      <div class="fee-builder-actions"><button class="button button-outline" id="studentManageCancel">Hủy</button><button class="button button-primary" id="studentManageSave">Lưu học sinh</button></div>
     </section>
   </div>
   <div class="toast" id="toast" role="status"></div>
@@ -370,7 +387,7 @@
   <div class="receipt-print-root" id="receiptPrintRoot" aria-hidden="true"></div>
   <script src="vendor/qrcode.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
-  <script src="app.js?v=20261010d"></script>
+  <script src="app.js?v=20261012a"></script>
   <script src="insurance.js"></script>
 </body>
 </html>
