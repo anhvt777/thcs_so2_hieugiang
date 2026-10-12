@@ -1916,14 +1916,14 @@ async function refresh() {
   const priorById=new Map(storedTransactions.map(t=>[t.id,t]));
   if(transactions.some(t=>{const old=priorById.get(t.id);return !old||['paymentStatus','matched','studentCode','studentName','matchedDueItem','matchedDueItemId','matchedDueItemIds','matchedBy'].some(key=>t[key]!==old[key]);})) await putMany('transactions',transactions);
   const activeStudents=students.filter(s=>s.status!=='inactive');const t=totals(activeStudents,transactions);const classes=new Set(activeStudents.map(s=>s.className).filter(Boolean));
-  $('#statStudents').textContent=students.length.toLocaleString('vi-VN');$('#statClasses').textContent=students.length?`${classes.size} lớp`:'Chưa có danh sách';
+  $('#statStudents').textContent=activeStudents.length.toLocaleString('vi-VN');$('#statClasses').textContent=activeStudents.length?`${classes.size} lớp`:'Chưa có danh sách';
   $('#statFeeItems').textContent=t.dueItems.toLocaleString('vi-VN');$('#statDueAmount').textContent=`${money(t.due)} phải thu`;
   $('#statPaidItems').textContent=t.paidItems.toLocaleString('vi-VN');$('#statPaidAmount').textContent=`${money(t.paid)} đã ghi nhận`;
   $('#statUnpaidItems').textContent=t.unpaidItems.toLocaleString('vi-VN');$('#statRemainAmount').textContent=`${money(t.remain)} còn lại`;
   $('#completionPercent').textContent=`${t.pct}%`;
   $('#completionRing').style.background=`conic-gradient(var(--teal) ${t.pct*3.6}deg,#dce8e5 0deg)`;
-  const legacy=students.some(s=>!s.hasFeeBreakdown);
-  const notice=students.length?`${students.length} học sinh · ${transactions.filter(x=>x.paymentStatus==='valid').length} món thu khớp chính xác / ${transactions.length} giao dịch. ${legacy?'Danh sách cũ chỉ có tổng phải thu; hãy nhập lại file chi tiết từng khoản.':'Dữ liệu đang lưu riêng trên máy này.'}`:'Chọn danh sách học sinh và báo cáo thu để bắt đầu theo dõi.';
+  const legacy=activeStudents.some(s=>!s.hasFeeBreakdown),inactiveCount=students.length-activeStudents.length;
+  const notice=activeStudents.length?`${activeStudents.length} học sinh đang theo dõi${inactiveCount?` · ${inactiveCount} học sinh nghỉ/chuyển trường`:''} · ${transactions.filter(x=>x.paymentStatus==='valid').length} món thu khớp chính xác / ${transactions.length} giao dịch. ${legacy?'Danh sách cũ chỉ có tổng phải thu; hãy nhập lại file chi tiết từng khoản.':'Dữ liệu đang lưu riêng trên máy này.'}`:'Chọn danh sách học sinh và báo cáo thu để bắt đầu theo dõi.';
   $('#dataNoticeText').textContent=notice;
   renderFeeProgress(t.summaries);renderChart(transactions);renderClasses(activeStudents,transactions);renderStudents(students,transactions);renderFeeDetails(activeStudents,transactions,t.summaries);
   const feeCatalog=await getFeeCatalog();await populateFeeReportFilters(feeCatalog);await renderFeeSetup(activeStudents);await renderCashSession(activeStudents,transactions);renderQrPage(activeStudents,transactions,qrConfig);await renderNoticeTool(activeStudents,transactions,feeCatalog);await renderReceiptPage(students,transactions);
