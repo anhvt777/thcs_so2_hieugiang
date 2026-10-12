@@ -304,6 +304,14 @@ function studentFeesFromRow(row, map) {
   const dueByCategory=dueItems.reduce((out,item)=>(out[item.category]=(out[item.category]||0)+item.amount,out),{});
   return {due,dueItems,dueByCategory,hasFeeBreakdown:hasBreakdown};
 }
+function mergeImportedDueItems(freshItems,priorItems){
+  const old=Array.isArray(priorItems)?priorItems:[];
+  return (freshItems||[]).map(item=>{
+    const prior=old.find(x=>x.id===item.id)||old.find(x=>x.category===item.category&&slug(x.name)===slug(item.name));
+    if(!prior)return item;
+    return {...prior,...item,paymentCode:prior.paymentCode||item.paymentCode||'',paymentCodeAliases:Array.isArray(prior.paymentCodeAliases)?prior.paymentCodeAliases:[],qrAccountNumber:prior.qrAccountNumber||'',catalogId:prior.catalogId||item.catalogId||'',feeCode:prior.feeCode||item.feeCode||'',shortCode:prior.shortCode||item.shortCode||''};
+  });
+}
 function studentIdentity(s){
   const external=slug(String(s?.externalCode||'').replace(/\s+/g,''));
   if(external)return `ext|${external}`;
@@ -463,9 +471,13 @@ async function confirmImport() {
           const choose=(fresh,oldValue)=>fresh||oldValue||'';
           const fees=feeMapped?studentFeesFromRow(row,map):null;
           const effectiveClass=choose(className,prior.className);
-          const classStudentCode=classAllocator.validForClass(prior.classStudentCode,effectiveClass)?prior.classStudentCode:classAllocator.next(effectiveClass);
+          const sameClass=classAllocator.validForClass(prior.classStudentCode,effectiveClass),classStudentCode=sameClass?prior.classStudentCode:classAllocator.next(effectiveClass);
+          const classCodeHistory=[...(prior.classCodeHistory||[])];
+          if(!sameClass&&prior.classStudentCode&&prior.className&&slug(prior.className)!==slug(effectiveClass)){
+            classCodeHistory.push({className:prior.className,classStudentCode:prior.classStudentCode,from:prior.classCodeAssignedAt||prior.createdAt||'',to:now});
+          }
           const next={
-            ...prior,code,classStudentCode,
+            ...prior,code,classStudentCode,classCodeHistory,classCodeAssignedAt:sameClass?(prior.classCodeAssignedAt||prior.createdAt||now):now,
             name:choose(name,prior.name),
             className:effectiveClass,
             externalCode:choose(profile.externalCode,prior.externalCode),
@@ -476,7 +488,7 @@ async function confirmImport() {
             note:choose(profile.note,prior.note),
             personalId:'',ethnicity:'',fatherName:'',motherName:'',phone:'',
             due:feeMapped?fees.due:(num(prior.due)||0),
-            dueItems:feeMapped?fees.dueItems:(Array.isArray(prior.dueItems)?prior.dueItems:[]),
+            dueItems:feeMapped?mergeImportedDueItems(fees.dueItems,prior.dueItems):(Array.isArray(prior.dueItems)?prior.dueItems:[]),
             dueByCategory:feeMapped?fees.dueByCategory:(prior.dueByCategory||{insurance:0,mandatory:0,service:0,other:0}),
             hasFeeBreakdown:feeMapped?fees.hasFeeBreakdown:!!prior.hasFeeBreakdown,
             identityKey:studentIdentity({name:choose(name,prior.name),className:effectiveClass,birthDate:choose(profile.birthDate,prior.birthDate),gender:choose(profile.gender,prior.gender),externalCode:choose(profile.externalCode,prior.externalCode)}),
