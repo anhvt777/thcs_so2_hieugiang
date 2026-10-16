@@ -7,7 +7,7 @@
   <meta name="description" content="Quản lý và đối soát từng khoản thu học sinh. Dữ liệu được lưu cục bộ trên thiết bị đang sử dụng.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; worker-src 'self'; manifest-src 'self'; form-action 'self'">
   <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css?v=20261016b">
+  <link rel="stylesheet" href="styles.css?v=20261016c">
   <title>Trường THCS Số 2 Hiếu Giang · Quản lý thu học sinh</title>
 </head>
 <body>
@@ -155,38 +155,6 @@
         <article class="panel table-panel fee-breakdown-panel"><div class="panel-header"><div><h2>Chi tiết dịch vụ khác</h2><p>Tách theo nội dung thực tế như gửi xe, nước uống và dịch vụ khác.</p></div><span class="mini-tag" id="serviceTxnCount">0 giao dịch</span></div><div class="table-wrap"><table><thead><tr><th>NỘI DUNG THU</th><th>SỐ GIAO DỊCH</th><th>SỐ HỌC SINH</th><th>SỐ TIỀN ĐÃ THU</th></tr></thead><tbody id="serviceBreakdownTable"><tr><td colspan="4" class="empty-cell">Chưa có giao dịch dịch vụ.</td></tr></tbody></table></div></article>
         <article class="panel table-panel"><div class="panel-header"><div><h2>Giao dịch theo khoản thu</h2><p>Danh sách chi tiết được nhập trên thiết bị này</p></div><div class="filter-pills"><span class="filter-pill">Tất cả <b id="allTxnCount">0</b></span><span class="filter-pill">Khớp <b id="matchedTxnCount">0</b></span><span class="filter-pill">Chưa khớp <b id="unmatchedTxnCount">0</b></span></div></div><div class="table-wrap"><table><thead><tr><th>NGÀY</th><th>MÃ GIAO DỊCH</th><th>KHOẢN THU</th><th>NỘI DUNG</th><th>MÃ HS / HỌC SINH</th><th>SỐ TIỀN</th><th>TRẠNG THÁI</th></tr></thead><tbody id="transactionsTable"><tr><td colspan="7" class="empty-cell">Chưa có báo cáo ngân hàng.</td></tr></tbody></table></div></article>
 
-        <article class="panel cash-session-card">
-          <div class="panel-header"><div><h2>⚡ Thu tiền mặt nhanh theo phiên</h2><p>Tick các khoản thực nhận, kiểm đếm tiền thực tế và chỉ đồng bộ vào dữ liệu thu chung sau khi thủ quỹ xác nhận khớp.</p></div><span class="category-badge service">CHƯA ĐỒNG BỘ</span></div>
-          <div class="cash-session-toolbar">
-            <label class="qr-field"><span>Lớp</span><select id="cashSessionClass"><option value="">— Chọn lớp —</option></select></label>
-            <label class="qr-field"><span>Tìm học sinh</span><input id="cashSessionSearch" type="search" placeholder="Nhập tên hoặc mã học sinh"></label>
-            <label class="qr-field"><span>Ngày thu</span><input id="cashSessionDate" type="date"></label>
-            <label class="qr-field"><span>Thủ quỹ</span><input id="cashSessionCashier" maxlength="80" placeholder="Họ và tên thủ quỹ"></label>
-            <label class="qr-field"><span>Hình thức</span><select id="cashSessionMethod"><option value="cashier">Thu qua thủ quỹ</option><option value="direct_school">Phụ huynh chuyển thẳng cho trường</option></select></label>
-          </div>
-          <div class="cash-session-stats">
-            <div><span>Học sinh đã chọn</span><strong id="cashSessionStudentCount">0</strong></div>
-            <div><span>Số khoản đã chọn</span><strong id="cashSessionItemCount">0</strong></div>
-            <div><span>Tổng theo sổ</span><strong id="cashSessionExpected">0 ₫</strong></div>
-            <div><span>Tiền thực tế</span><strong id="cashSessionActualLabel">0 ₫</strong></div>
-            <div><span>Chênh lệch</span><strong id="cashSessionDifference">0 ₫</strong></div>
-          </div>
-          <div class="cash-session-table-wrap"><table class="cash-session-table"><thead id="cashSessionHead"><tr><th>STT</th><th>HỌC SINH</th><th>LỚP</th><th>Chọn lớp để bắt đầu</th></tr></thead><tbody id="cashSessionBody"><tr><td colspan="4" class="empty-cell">Chọn lớp để hiển thị danh sách thu nhanh.</td></tr></tbody></table></div>
-          <div class="cash-session-check">
-            <label class="qr-field"><span>Tiền thực tế thủ quỹ kiểm đếm</span><input id="cashSessionActual" inputmode="numeric" placeholder="Nhập số tiền thực tế"></label>
-            <div class="cash-session-status" id="cashSessionStatus">Chưa có khoản được chọn.</div>
-          </div>
-          <div class="receipt-batch-actions cash-session-actions">
-            <span>Phiên chưa xác nhận không được tính vào số thu chung. Hệ thống chặn các món đã thu qua BIDV hoặc đã xác nhận trước đó.</span>
-            <button class="button button-outline" id="cashierFileImportButton">⇧ Upload file thủ quỹ</button>
-            <button class="button button-outline" id="exportCashSession">↓ Xuất bảng kê phiên</button>
-            <button class="button button-outline" id="clearCashSession">Hủy lựa chọn</button>
-            <button class="button button-primary" id="confirmCashSession" disabled>✓ Xác nhận số thu & đồng bộ</button>
-          </div>
-          <div class="cashier-file-summary" id="cashierFileSummary">Chưa upload file theo dõi của thủ quỹ.</div>
-        </article>
-        <input type="file" id="cashierFileInput" accept=".xlsx" hidden>
-
         <article class="panel cash-file-card">
           <div class="panel-header"><div><h2>Nhập file các món đã thu thủ công</h2><p>Dùng khi kế toán có danh sách thu ngoài BIDV. File có thể chứa Mã HS/Mã theo lớp/Mã số CĐ hoặc Họ tên + Lớp, kèm Khoản thu và Số tiền.</p></div><span class="mini-tag">XLSX · CSV</span></div>
           <div class="receipt-batch-actions">
@@ -284,6 +252,39 @@
           </div>
           <div class="receipt-config-actions"><span>Không chèn ảnh chữ ký. Chứng từ chỉ hiển thị họ tên người ký khi đã cấu hình.</span><button class="button button-primary" id="saveReceiptConfig">Lưu cấu hình</button></div>
         </article>
+
+        <article class="panel cash-session-card">
+          <div class="panel-header"><div><h2>⚡ Thu tiền mặt nhanh theo phiên</h2><p>Tick các khoản thực nhận, kiểm đếm tiền thực tế và chỉ đồng bộ vào dữ liệu thu chung sau khi thủ quỹ xác nhận khớp.</p></div><span class="category-badge service">CHƯA ĐỒNG BỘ</span></div>
+          <div class="cash-session-toolbar">
+            <label class="qr-field"><span>Lớp</span><select id="cashSessionClass"><option value="">— Chọn lớp —</option></select></label>
+            <label class="qr-field"><span>Tìm học sinh</span><input id="cashSessionSearch" type="search" placeholder="Nhập tên hoặc mã học sinh"></label>
+            <label class="qr-field"><span>Ngày thu</span><input id="cashSessionDate" type="date"></label>
+            <label class="qr-field"><span>Thủ quỹ</span><input id="cashSessionCashier" maxlength="80" placeholder="Họ và tên thủ quỹ"></label>
+            <label class="qr-field"><span>Hình thức</span><select id="cashSessionMethod"><option value="cashier">Thu qua thủ quỹ</option><option value="direct_school">Phụ huynh chuyển thẳng cho trường</option></select></label>
+          </div>
+          <div class="cash-session-stats">
+            <div><span>Học sinh đã chọn</span><strong id="cashSessionStudentCount">0</strong></div>
+            <div><span>Số khoản đã chọn</span><strong id="cashSessionItemCount">0</strong></div>
+            <div><span>Tổng theo sổ</span><strong id="cashSessionExpected">0 ₫</strong></div>
+            <div><span>Tiền thực tế</span><strong id="cashSessionActualLabel">0 ₫</strong></div>
+            <div><span>Chênh lệch</span><strong id="cashSessionDifference">0 ₫</strong></div>
+          </div>
+          <div class="cash-session-table-wrap"><table class="cash-session-table"><thead id="cashSessionHead"><tr><th>STT</th><th>HỌC SINH</th><th>LỚP</th><th>Chọn lớp để bắt đầu</th></tr></thead><tbody id="cashSessionBody"><tr><td colspan="4" class="empty-cell">Chọn lớp để hiển thị danh sách thu nhanh.</td></tr></tbody></table></div>
+          <div class="cash-session-check">
+            <label class="qr-field"><span>Tiền thực tế thủ quỹ kiểm đếm</span><input id="cashSessionActual" inputmode="numeric" placeholder="Nhập số tiền thực tế"></label>
+            <div class="cash-session-status" id="cashSessionStatus">Chưa có khoản được chọn.</div>
+          </div>
+          <div class="receipt-batch-actions cash-session-actions">
+            <span>Phiên chưa xác nhận không được tính vào số thu chung. Hệ thống chặn các món đã thu qua BIDV hoặc đã xác nhận trước đó.</span>
+            <button class="button button-outline" id="cashierFileImportButton">⇧ Upload file thủ quỹ</button>
+            <button class="button button-outline" id="exportCashSession">↓ Xuất bảng kê phiên</button>
+            <button class="button button-outline" id="clearCashSession">Hủy lựa chọn</button>
+            <button class="button button-primary" id="confirmCashSession" disabled>✓ Xác nhận số thu & đồng bộ</button>
+          </div>
+          <div class="cashier-file-summary" id="cashierFileSummary">Chưa upload file theo dõi của thủ quỹ.</div>
+        </article>
+        <input type="file" id="cashierFileInput" accept=".xlsx" hidden>
+
 
         <article class="panel cash-entry-card">
           <div class="panel-header"><div><h2>Ghi nhận thu tiền mặt</h2><p>Chọn đúng học sinh và món chưa thu. Khoản tiền mặt được lưu riêng và không bị mất khi cập nhật báo cáo ngân hàng.</p></div><span class="category-badge service">TIỀN MẶT</span></div>
@@ -390,7 +391,7 @@
   <div class="receipt-print-root" id="receiptPrintRoot" aria-hidden="true"></div>
   <script src="vendor/qrcode.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
-  <script src="app.js?v=20261016b"></script>
+  <script src="app.js?v=20261016c"></script>
   <script src="insurance.js"></script>
 </body>
 </html>
