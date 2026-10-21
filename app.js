@@ -2020,7 +2020,7 @@ async function refresh() {
   const notice=activeStudents.length?`${activeStudents.length} học sinh đang theo dõi${inactiveCount?` · ${inactiveCount} học sinh nghỉ/chuyển trường`:''} · ${transactions.filter(x=>x.paymentStatus==='valid').length} món thu khớp chính xác / ${transactions.length} giao dịch. ${legacy?'Danh sách cũ chỉ có tổng phải thu; hãy nhập lại file chi tiết từng khoản.':'Dữ liệu đang lưu riêng trên máy này.'}`:'Chọn danh sách học sinh và báo cáo thu để bắt đầu theo dõi.';
   $('#dataNoticeText').textContent=notice;
   renderFeeProgress(t.summaries);renderChart(transactions);renderClasses(activeStudents,transactions);renderStudents(students,transactions);renderFeeDetails(activeStudents,transactions,t.summaries);
-  const feeCatalog=await getFeeCatalog();await populateFeeReportFilters(feeCatalog);await renderFeeSetup(activeStudents);await renderCashSession(activeStudents,transactions);renderQrPage(activeStudents,transactions,qrConfig);await renderNoticeTool(activeStudents,transactions,feeCatalog);await renderReceiptPage(students,transactions);
+  const feeCatalog=await getFeeCatalog();await populateFeeReportFilters(feeCatalog);await renderFeeSetup(activeStudents);await renderCashSession(activeStudents,transactions);renderQrPage(activeStudents,transactions,qrConfig);await renderNoticeTool(activeStudents,transactions,feeCatalog);await renderReceiptPage(students,transactions);await renderPaidReportTool(activeStudents,transactions,feeCatalog);await renderRemittanceTool(activeStudents,transactions);
   const transactionHtml=transactions.length?renderTransactions(transactions):'<tr><td colspan="7" class="empty-cell">Chưa có báo cáo thu.</td></tr>';
   $('#transactionsTable').innerHTML=transactionHtml;$('#importsTransactionsTable').innerHTML=transactionHtml;
   ['allTxnCount','importsAllTxnCount'].forEach(id=>{const el=$(`#${id}`);if(el)el.textContent=transactions.length;});
@@ -2218,6 +2218,193 @@ async function exportClassFeeReport(){
   toast(`Đã xuất báo cáo Excel ${label}.`);
 }
 
+function paidReportDateRange(){
+  const from=$('#paidReportFromDate')?.value||'',to=$('#paidReportToDate')?.value||'';
+  return {from,to};
+}
+function paidReportTxnDate(t){return normalizeDate(String(t.date||t.paymentDate||t.confirmedAt||t.importedAt||'').trim());}
+function paidReportTxnInRange(t,range){
+  const d=paidReportTxnDate(t);
+  if(!d)return !range.from&&!range.to;
+  if(range.from&&d<range.from)return false;
+  if(range.to&&d>range.to)return false;
+  return true;
+}
+function paidReportTransactionMap(transactions){
+  const range=paidReportDateRange(),map=new Map();
+  transactions.filter(t=>t.paymentStatus==='valid'&&paidReportTxnInRange(t,range)).forEach(t=>{
+    transactionMatchedItemIds(t).forEach(id=>map.set(cashSessionKey(t.studentCode,id),t));
+  });
+  return map;
+}
+function paidReportFeeKey(item){
+  return item.catalogId?`catalog:${item.catalogId}`:`name:${slug(item.name)}`;
+}
+function paidReportSelectedFees(){
+  const values=selectedValues($('#paidReportFees'));
+  return !values.length||values.includes('all')?null:new Set(values);
+}
+function paidReportRows(students,transactions){
+  const paidTxnMap=paidReportTransactionMap(transactions);
+  const cls=$('#paidReportClass')?.value||'all',studentCode=$('#paidReportStudent')?.value||'all';
+  const condition=$('#paidReportCondition')?.value||'any',selected=paidReportSelectedFees();
+  const rows=[];
+  for(const student of students){
+    if(cls!=='all'&&student.className!==cls)continue;
+    if(studentCode!=='all'&&student.code!==studentCode)continue;
+    const dueItems=studentDueItems(student).filter(item=>!selected||selected.has(paidReportFeeKey(item)));
+    if(!dueItems.length)continue;
+    if(condition==='all'&&selected&&new Set(dueItems.map(paidReportFeeKey)).size<selected.size)continue;
+    const paidItems=dueItems.filter(item=>paidTxnMap.has(cashSessionKey(student.code,item.id)));
+    const include=condition==='all'?paidItems.length===dueItems.length:paidItems.length>0;
+    if(!include)continue;
+    const paymentDates=paidItems.map(item=>paidReportTxnDate(paidTxnMap.get(cashSessionKey(student.code,item.id)))).filter(Boolean);
+    rows.push({
+      student,
+      paidItems,
+      paymentDates,
+      amount:paidItems.reduce((sum,item)=>sum+num(item.amount),0),
+      note:paidItems.map(item=>item.name).join('; ')
+    });
+  }
+  return rows.sort((a,b)=>(a.student.className||'').localeCompare(b.student.className||'','vi',{numeric:true,sensitivity:'base'})||a.student.name.localeCompare(b.student.name,'vi'));
+}
+function populatePaidReportControls(students,catalog,transactions){
+  const classEl=$('#paidReportClass'),studentEl=$('#paidReportStudent'),feeEl=$('#paidReportFees');if(!classEl)return;
+  const currentClass=classEl.value||'all',currentStudent=studentEl.value||'all',selected=new Set(selectedValues(feeEl));
+  const classes=[...new Set(students.map(s=>s.className).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'vi',{numeric:true,sensitivity:'base'}));
+  classEl.innerHTML='<option value="all">Tất cả lớp</option>'+classes.map(v=>`<option value="${escapeHTML(v)}">${escapeHTML(v)}</option>`).join('');
+  classEl.value=classes.includes(currentClass)?currentClass:'all';
+  const scoped=students.filter(s=>classEl.value==='all'||s.className===classEl.value).sort((a,b)=>(a.className||'').localeCompare(b.className||'','vi',{numeric:true})||a.name.localeCompare(b.name,'vi'));
+  studentEl.innerHTML='<option value="all">Tất cả học sinh</option>'+scoped.map(s=>`<option value="${escapeHTML(s.code)}">${escapeHTML(s.className||'')} · ${escapeHTML(s.name)}</option>`).join('');
+  studentEl.value=scoped.some(s=>s.code===currentStudent)?currentStudent:'all';
+
+  const paidTxnMap=paidReportTransactionMap(transactions);
+  const feeMap=new Map();
+  students.forEach(student=>studentDueItems(student).forEach(item=>{
+    if(!paidTxnMap.has(cashSessionKey(student.code,item.id)))return;
+    const key=paidReportFeeKey(item);if(!feeMap.has(key))feeMap.set(key,item);
+  }));
+  feeEl.innerHTML='<option value="all">Tất cả khoản đã nộp</option>'+[...feeMap.entries()].sort((a,b)=>a[1].name.localeCompare(b[1].name,'vi')).map(([key,item])=>`<option value="${escapeHTML(key)}">${escapeHTML(item.name)} · ${money(item.amount)}</option>`).join('');
+  const kept=[...feeEl.options].filter(o=>selected.has(o.value)&&o.value!=='all');
+  if(kept.length)kept.forEach(o=>o.selected=true);else feeEl.options[0].selected=true;
+}
+function updatePaidReportSummary(students,transactions){
+  const rows=paidReportRows(students,transactions),amount=rows.reduce((sum,row)=>sum+row.amount,0);
+  const el=$('#paidReportSummary');if(el)el.textContent=rows.length?`${rows.length.toLocaleString('vi-VN')} học sinh · tổng đã nộp ${money(amount)}`:'Không có học sinh phù hợp điều kiện đã chọn.';
+  return rows;
+}
+async function renderPaidReportTool(students,transactions,catalog){
+  populatePaidReportControls(students,catalog,transactions);updatePaidReportSummary(students,transactions);
+}
+async function exportPaidReport(){
+  if(typeof JSZip==='undefined')return toast('Thiếu thư viện xuất Excel. Hãy tải lại trang.',true);
+  const [students,stored,catalog]=await Promise.all([all('students'),all('transactions'),getFeeCatalog()]);
+  const transactions=reconcileTransactions(students,stored);
+  const rows=paidReportRows(students,transactions);
+  if(!rows.length)return toast('Không có học sinh đã nộp phù hợp điều kiện để xuất.',true);
+
+  const selected=paidReportSelectedFees();
+  const selectedLabels=selected?[...selected].map(key=>{
+    if(key.startsWith('catalog:'))return catalog.find(f=>f.id===key.slice(8))?.name||'Khoản thu';
+    const item=rows.flatMap(r=>r.paidItems).find(i=>paidReportFeeKey(i)===key);return item?.name||'Khoản thu';
+  }):['Tất cả khoản đã nộp'];
+  const classValue=$('#paidReportClass').value||'all',studentValue=$('#paidReportStudent').value||'all';
+  const scopeLabel=studentValue!=='all'?(rows[0]?.student.name||'Học sinh'):(classValue==='all'?'Toàn trường':`Lớp ${classValue}`);
+  const noteMode=$('#paidReportNoteMode').value||'fees';
+  const {from:fromDate,to:toDate}=paidReportDateRange();
+  const periodLabel=fromDate&&toDate?`Từ ${noticeDateVi(fromDate)} đến ${noticeDateVi(toDate)}`:(fromDate?`Từ ${noticeDateVi(fromDate)}`:(toDate?`Đến ${noticeDateVi(toDate)}`:'Toàn bộ thời gian'));
+
+  const zip=new JSZip();
+  zip.file('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>');
+  zip.folder('_rels').file('.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+  zip.folder('xl').file('workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Danh sách đã nộp" sheetId="1" r:id="rId1"/></sheets></workbook>');
+  zip.folder('xl').folder('_rels').file('workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
+  zip.folder('xl').file('styles.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="11"/><name val="Times New Roman"/></font><font><b/><sz val="14"/><name val="Times New Roman"/></font><font><b/><sz val="16"/><name val="Times New Roman"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Times New Roman"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7F3F0"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF078778"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"><color rgb="FF9BB8B2"/></left><right style="thin"><color rgb="FF9BB8B2"/></right><top style="thin"><color rgb="FF9BB8B2"/></top><bottom style="thin"><color rgb="FF9BB8B2"/></bottom></border></borders><cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="3" fontId="0" fillId="0" borderId="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="3" borderId="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>');
+
+  const sheetRows=[];
+  sheetRows.push(excelRow(1,[{v:'UBND XÃ HIẾU GIANG',s:1}],22));
+  sheetRows.push(excelRow(2,[{v:'TRƯỜNG THCS SỐ 2 HIẾU GIANG',s:1}],22));
+  sheetRows.push(excelRow(4,[{v:'DANH SÁCH HỌC SINH ĐÃ NỘP KHOẢN THU',s:2}],28));
+  sheetRows.push(excelRow(5,[{v:`Phạm vi: ${scopeLabel} · Khoản thu: ${selectedLabels.join(' + ')} · Thời gian thu: ${periodLabel}`,s:1}],22));
+  sheetRows.push(excelRow(7,['STT','HỌ TÊN','LỚP','ĐỊA CHỈ (THÔN)','SỐ CCCD','GIỚI TÍNH','NGÀY/THÁNG/NĂM SINH','NGÀY NỘP','SỐ TIỀN','GHI CHÚ'].map(v=>({v,s:3})),34));
+  rows.forEach((row,index)=>{
+    const s=row.student;
+    const note=noteMode==='blank'?'':row.note;
+    sheetRows.push(excelRow(index+8,[
+      {v:index+1,t:'n',s:4},{v:s.name,s:4},{v:s.className||'',s:4},{v:s.address||'',s:4},{v:s.personalId||'',s:4},{v:s.gender||'',s:4},{v:s.birthDate?noticeDateVi(normalizeDate(s.birthDate)):'',s:4},{v:row.paymentDates?.length?[...new Set(row.paymentDates.map(noticeDateVi))].join('; '):'',s:4},{v:row.amount,t:'n',s:5},{v:note,s:4}
+    ],22));
+  });
+  const totalRow=rows.length+8;
+  sheetRows.push(excelRow(totalRow,[{v:'',s:4},{v:'TỔNG CỘNG',s:3},{v:'',s:3},{v:'',s:3},{v:'',s:3},{v:'',s:3},{v:'',s:3},{v:'',s:3},{v:rows.reduce((sum,r)=>sum+r.amount,0),t:'n',s:5},{v:'',s:3}],24));
+
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="7" topLeftCell="A8" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols><col min="1" max="1" width="7" customWidth="1"/><col min="2" max="2" width="28" customWidth="1"/><col min="3" max="3" width="10" customWidth="1"/><col min="4" max="4" width="20" customWidth="1"/><col min="5" max="5" width="19" customWidth="1"/><col min="6" max="6" width="12" customWidth="1"/><col min="7" max="7" width="20" customWidth="1"/><col min="8" max="8" width="16" customWidth="1"/><col min="9" max="9" width="16" customWidth="1"/><col min="10" max="10" width="34" customWidth="1"/></cols><sheetData>${sheetRows.join('')}</sheetData><autoFilter ref="A7:J${rows.length+7}"/><mergeCells count="5"><mergeCell ref="A1:D1"/><mergeCell ref="A2:D2"/><mergeCell ref="A4:J4"/><mergeCell ref="A5:J5"/><mergeCell ref="B${totalRow}:H${totalRow}"/></mergeCells></worksheet>`;
+  zip.folder('xl').folder('worksheets').file('sheet1.xml',sheet);
+
+  const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const feeName=selectedLabels.length===1?selectedLabels[0]:'Nhieu-khoan',className=classValue==='all'?'Toan-truong':classValue;
+  const datePart=fromDate||toDate?feeSafeCode(`${fromDate||'dau'}_${toDate||'nay'}`,24):'toan-bo-thoi-gian';
+  const filename=`Danh-sach-da-nop-${feeSafeCode(className,20)}-${feeSafeCode(feeName,28)}-${datePart}.xlsx`;
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1200);
+  toast(`Đã xuất ${rows.length} học sinh đã nộp.`);
+}
+
+async function getInsuranceRemittances(){
+  return (await all('history')).filter(x=>x.kind==='Chuyển nộp bảo hiểm'&&Array.isArray(x.items));
+}
+function remittanceRange(){return {from:$('#remitFromDate')?.value||'',to:$('#remitToDate')?.value||''};}
+function remittanceTxnInRange(t,range){
+  const d=paidReportTxnDate(t);if(!d)return !range.from&&!range.to;
+  if(range.from&&d<range.from)return false;if(range.to&&d>range.to)return false;return true;
+}
+async function computeRemittanceState(students,transactions){
+  const category=$('#remitFeeType')?.value||'insurance',range=remittanceRange();
+  const validTx=transactions.filter(t=>t.paymentStatus==='valid'&&remittanceTxnInRange(t,range));
+  const txMap=new Map();
+  validTx.forEach(t=>transactionMatchedItemIds(t).forEach(id=>txMap.set(cashSessionKey(t.studentCode,id),t)));
+  const remittances=await getInsuranceRemittances();
+  const remittedKeys=new Set(remittances.filter(r=>r.feeCategory===category).flatMap(r=>r.items.map(i=>cashSessionKey(i.studentCode,i.itemId))));
+  const eligible=[],allCollected=[];
+  for(const s of students){
+    for(const item of studentDueItems(s).filter(x=>x.category===category)){
+      const key=cashSessionKey(s.code,item.id),txn=txMap.get(key);if(!txn)continue;
+      const row={student:s,item,txn,key,date:paidReportTxnDate(txn),amount:item.amount};
+      allCollected.push(row);if(!remittedKeys.has(key))eligible.push(row);
+    }
+  }
+  const previously=allCollected.filter(x=>remittedKeys.has(x.key));
+  return {category,range,eligible,previously,allCollected,collectedAmount:allCollected.reduce((s,x)=>s+x.amount,0),previouslyAmount:previously.reduce((s,x)=>s+x.amount,0),pendingAmount:eligible.reduce((s,x)=>s+x.amount,0)};
+}
+async function renderRemittanceTool(students,transactions){
+  if(!$('#remitPreviewBody'))return;
+  const state=await computeRemittanceState(students,transactions);
+  const actual=parseMoneyInput($('#remitActualAmount')?.value||0),diff=actual-state.pendingAmount;
+  $('#remitCollected').textContent=money(state.collectedAmount);$('#remitPreviously').textContent=money(state.previouslyAmount);$('#remitPending').textContent=money(state.pendingAmount);
+  $('#remitStudentCount').textContent=new Set(state.eligible.map(x=>x.student.code)).size;$('#remitDifference').textContent=money(diff);
+  $('#remitDifference').classList.toggle('cash-diff-ok',state.pendingAmount>0&&diff===0);$('#remitDifference').classList.toggle('cash-diff-bad',diff!==0);
+  $('#remitPreviewBody').innerHTML=state.eligible.length?state.eligible.map((x,i)=>'<tr><td>'+(i+1)+'</td><td><strong>'+escapeHTML(x.student.name)+'</strong></td><td>'+escapeHTML(x.student.className||'')+'</td><td>'+escapeHTML(x.date?noticeDateVi(x.date):'—')+'</td><td>'+money(x.amount)+'</td><td><span class="status-badge pending">Chờ chuyển</span></td></tr>').join(''):'<tr><td colspan="6" class="empty-cell">Không còn khoản phù hợp chờ chuyển.</td></tr>';
+  const recipient=$('#remitRecipient')?.value.trim(),transferDate=$('#remitTransferDate')?.value,reference=$('#remitReference')?.value.trim();
+  const canConfirm=state.pendingAmount>0&&actual===state.pendingAmount&&recipient&&transferDate&&reference;$('#confirmRemittance').disabled=!canConfirm;
+  $('#remitStatus').innerHTML=!state.pendingAmount?'<strong class="success-text">Không còn số phải chuyển trong phạm vi đã chọn.</strong>':(actual!==state.pendingAmount?'Số phải chuyển <strong>'+money(state.pendingAmount)+'</strong> · thực chuyển <strong>'+money(actual)+'</strong> · chênh lệch <strong>'+money(diff)+'</strong>.':(!recipient||!transferDate||!reference?'Số tiền đã khớp. Hãy nhập đơn vị nhận, ngày chuyển và số chứng từ.':'<strong class="success-text">KHỚP · Có thể xác nhận đợt chuyển nộp.</strong>'));
+  const history=await getInsuranceRemittances();
+  $('#remitHistoryBody').innerHTML=history.length?history.sort((a,b)=>(b.transferDate||'').localeCompare(a.transferDate||'')).map(r=>'<tr><td>'+escapeHTML(noticeDateVi(r.transferDate||''))+'</td><td>'+escapeHTML(getFeeLabel(r.feeCategory))+'</td><td>'+escapeHTML(r.recipient||'')+'</td><td>'+new Set(r.items.map(i=>i.studentCode)).size+'</td><td>'+money(r.amount)+'</td><td>'+escapeHTML(r.reference||'')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty-cell">Chưa có đợt chuyển nộp.</td></tr>';
+  return state;
+}
+async function confirmRemittance(){
+  const [students,stored]=await Promise.all([all('students'),all('transactions')]),tx=reconcileTransactions(students,stored),state=await computeRemittanceState(students,tx);
+  const actual=parseMoneyInput($('#remitActualAmount').value),recipient=$('#remitRecipient').value.trim(),transferDate=$('#remitTransferDate').value,reference=$('#remitReference').value.trim(),note=$('#remitNote').value.trim();
+  if(!state.pendingAmount)return toast('Không có khoản bảo hiểm chờ chuyển.',true);if(actual!==state.pendingAmount)return toast('Số tiền thực chuyển chưa khớp số phải chuyển.',true);if(!recipient||!transferDate||!reference)return toast('Hãy nhập đơn vị nhận, ngày chuyển và số chứng từ.',true);
+  const now=new Date().toISOString();
+  const record={id:crypto.randomUUID(),kind:'Chuyển nộp bảo hiểm',fileName:reference,rows:state.eligible.length,imported:state.eligible.length,detail:getFeeLabel(state.category)+' · '+state.eligible.length+' khoản · '+money(state.pendingAmount)+' · '+recipient,at:now,feeCategory:state.category,recipient,transferDate,reference,note,amount:actual,range:state.range,items:state.eligible.map(x=>({studentCode:x.student.code,itemId:x.item.id,amount:x.amount,paymentDate:x.date}))};
+  await request('history','put',record);$('#remitActualAmount').value='';$('#remitReference').value='';$('#remitNote').value='';await refresh();toast('Đã xác nhận chuyển nộp '+money(actual)+' cho '+recipient+'.');
+}
+async function exportRemittancePreview(){
+  const [students,stored]=await Promise.all([all('students'),all('transactions')]),tx=reconcileTransactions(students,stored),state=await computeRemittanceState(students,tx);
+  if(!state.eligible.length)return toast('Không có khoản chờ chuyển để xuất.',true);
+  const headers=['STT','Họ tên','Lớp','Mã học sinh','Ngày sinh','Ngày nộp','Khoản thu','Số tiền'];
+  const rows=state.eligible.map((x,i)=>[i+1,x.student.name,x.student.className,x.student.code,noticeDateVi(normalizeDate(x.student.birthDate||'')),noticeDateVi(x.date||''),x.item.name,x.amount].map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(','));
+  download('bang-ke-chuyen-nop-'+state.category+'-'+new Date().toISOString().slice(0,10)+'.csv','\uFEFF'+headers.join(',')+'\r\n'+rows.join('\r\n'),'text/csv;charset=utf-8');
+}
 function exportStudents() {
   Promise.all([all('students'),all('transactions')]).then(([items,stored])=>{
     const tx=reconcileTransactions(items,stored),paid=new Set(tx.filter(t=>t.paymentStatus==='valid').flatMap(transactionPaidKeys));
@@ -2329,6 +2516,18 @@ function wire() {
   $('#classDetailBackdrop').addEventListener('click',e=>{if(e.target.id==='classDetailBackdrop')closeClassDetail();});
   $('#saveQrConfig').onclick=saveQrConfig;$('#generateQrs').onclick=()=>generateQrs().catch(e=>{console.error(e);toast(e.message||'Không tạo được mã QR.',true);});
   ['qrFeeFilter','qrClassFilter','qrStatusFilter'].forEach(id=>$(`#${id}`).addEventListener('change',()=>$('#downloadQrs').hidden=true));
+  const refreshPaidReport=async()=>{const [students,stored,catalog]=await Promise.all([all('students'),all('transactions'),getFeeCatalog()]);const active=students.filter(s=>s.status!=='inactive'),tx=reconcileTransactions(students,stored);populatePaidReportControls(active,catalog,tx);updatePaidReportSummary(active,tx);};
+  $('#paidReportClass').addEventListener('change',refreshPaidReport);
+  $('#paidReportStudent').addEventListener('change',async()=>{const [students,stored]=await Promise.all([all('students'),all('transactions')]);const active=students.filter(s=>s.status!=='inactive');updatePaidReportSummary(active,reconcileTransactions(students,stored));});
+  $('#paidReportCondition').addEventListener('change',async()=>{const [students,stored]=await Promise.all([all('students'),all('transactions')]);const active=students.filter(s=>s.status!=='inactive');updatePaidReportSummary(active,reconcileTransactions(students,stored));});
+  $('#paidReportFromDate').addEventListener('change',refreshPaidReport);
+  $('#paidReportToDate').addEventListener('change',refreshPaidReport);
+  $('#paidReportFees').addEventListener('change',async e=>{const selected=[...e.currentTarget.selectedOptions];if(selected.length>1&&selected.some(o=>o.value==='all'))e.currentTarget.querySelector('option[value="all"]').selected=false;const [students,stored]=await Promise.all([all('students'),all('transactions')]);const active=students.filter(s=>s.status!=='inactive');updatePaidReportSummary(active,reconcileTransactions(students,stored));});
+  $('#exportPaidReport').onclick=()=>exportPaidReport().catch(e=>{console.error(e);toast(e.message||'Không xuất được danh sách đã nộp.',true);});
+  const refreshRemit=async()=>{const [students,stored]=await Promise.all([all('students'),all('transactions')]);const active=students.filter(s=>s.status!=='inactive');await renderRemittanceTool(active,reconcileTransactions(students,stored));};
+  ['remitFeeType','remitFromDate','remitToDate','remitRecipient','remitTransferDate','remitReference','remitActualAmount','remitNote'].forEach(id=>{const el=$('#'+id);if(el)el.addEventListener(['remitActualAmount','remitRecipient','remitReference','remitNote'].includes(id)?'input':'change',refreshRemit);});
+  $('#confirmRemittance').onclick=()=>confirmRemittance().catch(e=>{console.error(e);toast(e.message||'Không xác nhận được chuyển nộp.',true);});
+  $('#exportRemitPreview').onclick=()=>exportRemittancePreview().catch(e=>{console.error(e);toast('Không xuất được bảng kê chuyển nộp.',true);});
   $('#exportStudents').onclick=exportStudents;$('#backupButton').onclick=$('#backupButtonTop').onclick=backup;$('#restoreButton').onclick=()=>$('#restoreFileInput').click();
   $('#clearDataButton').onclick=async()=>{if(confirm('Xóa toàn bộ dữ liệu học sinh, giao dịch và lịch sử trên trình duyệt này?')){await clearAll();await refresh();toast('Đã xóa dữ liệu trên máy này.');}};
   $('#menuToggle').onclick=()=>$('#sidebar').classList.toggle('open');
